@@ -15,11 +15,7 @@ var decryptedPlainText = aes256.decrypt(key, encryptedPlainText);
 console.log(encryptedPlainText,decryptedPlainText)
 // Set up Global configuration access
 dotenv.config();
-
-const { MongoClient, ServerApiVersion } = require('mongodb');
-const uri = "mongodb+srv://Yassine:C3PHVLSXciT4NwSb@cluster0.zmfdtgw.mongodb.net/?retryWrites=true&w=majority";
-let client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
-let db = client.db("mydb");
+let users = require('./users.json');
 let PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
 console.log(`Server is up and running on ${PORT} ...`);
@@ -27,68 +23,53 @@ console.log(`Server is up and running on ${PORT} ...`);
 
 // Main Code Here //
 // Generating JWT
-
+//ajout nouveau compte
 app.post("/creeruncompte", (req, res) => {
-	// Validate User Here
-	// Then generate JWT Token
-
-	let jwtSecretKey = "mysecretsecret";
-	let data = {
-		time: Date(),
-		userId: 12,
+	let object = {username: req.body.username, mdp: aes256.encrypt(key, req.body.mdp)}
+	foundUser = users.find(x => x.username === req.body.username);
+	console.log(foundUser)
+	if(foundUser == null){
+		users.push(object)
+		res.send({compte: "inscrit"})
+		
+	  }
+	else{
+		res.status(404).send("Veuillez choisir un username différent")
 	}
-
-	const token = jwt.sign(data, jwtSecretKey);
-
-	res.send(token);
-});
-
-app.post("/creeruncompte", (req, res) => {
-	// Validate User Here
-	// Then generate JWT Token
-
-	let jwtSecretKey = "mysecretsecret";
-	let data = {
-		time: Date(),
-		userId: 12,
-	}
-
-	const token = jwt.sign(data, jwtSecretKey);
-
-	res.send(token);
-});
-app.get("/getCustomer", async (req, res) => {
 	
-	await client.db('mydb').collection('customers').findOne().then(result => console.log(result), err => console.log(err));;
+})
 
-	res.send({ok: "ok"});
-});
-
-app.get('/answers', function (req, res){
-	client.open(function(err,db){ // <------everything wrapped inside this function
-		db.collection('customers', function(err, collection) {
-			collection.find().toArray(function(err, items) {
-				console.log(items);
-				res.send(items);
-			});
-		});
-	});
+app.post("/generateTokenAvecMDP", async (req, res) => { // << plus besoin du bodyParser vu qu'on l'a déclaré globalement plus haut
+    //const jwtSecretKey = "mysecretsecret";
+	console.log('users',users)
+	  foundUser = users.find((x) => {return (x.username === req.body.username) && (aes256.decrypt(key,x.mdp) === req.body.mdp)});
+	  console.log('founduser', foundUser)
+	  if(foundUser == null){
+		res.status(404).send("Votre username ou votre mot de passe est incorrect")
+	  }
+	  else{
+		let data = {
+			time: new Date(),
+			username: req.body.username		
+		  };
+		  console.log(data)
+		  const token = jwt.sign(data, process.env.JWT_SECRET_KEY, {expiresIn: 60});
+		  res.send({ bearer: token });
+	  }
+     
 });
 
 app.post("/generateToken", async (req, res) => { // << plus besoin du bodyParser vu qu'on l'a déclaré globalement plus haut
-    //const UserModel = dbo.collection("users");
-    const jwtSecretKey = "mysecretsecret";
-    await dbo.collection("users").findOne({username: req.body.username});
-	console.log(user.json());
-    //   let data = {
-    //     time: new Date(),
-    //     userame: user,
-    //   } ;
-	//   console.log(user);
-    //   const token = jwt.sign(data, jwtSecretKey);
-    //   res.send({ bearer: token });
+    //const jwtSecretKey = "mysecretsecret";
+	  
+      let data = {
+        time: new Date(),
+        username: req.body.username		
+      };
+	  console.log(data)
+      const token = jwt.sign(data, process.env.JWT_SECRET_KEY, {expiresIn: 1800});
+      res.send({ bearer: token });
 });
-
 
 // Verification of JWT
 app.get("/verifyToken", (req, res) => {
@@ -100,14 +81,12 @@ app.get("/verifyToken", (req, res) => {
     let jwtSecretKey = "mysecretsecret";
 
 	try {
-		console.log("ici")
         const authHeader = req.headers['authorization']
         const token = authHeader && authHeader.split(' ')[1]
-        console.log(token)
 		const verified = jwt.verify(token, jwtSecretKey);
 		if(verified){
-            console.log("ici")
-			return res.send("Successfully Verified");
+			// return res.send({valid: verified['time']});
+			return res.send(verified);
 		}else{
 			// Access Denied
 			return res.status(401).send(error);
@@ -117,4 +96,8 @@ app.get("/verifyToken", (req, res) => {
 		return res.status(401).send(error);
 	}
 });
+
+app.get("/getAllUsers", (req, res) => {
+	res.send(users)
+})
 //C3PHVLSXciT4NwSb
